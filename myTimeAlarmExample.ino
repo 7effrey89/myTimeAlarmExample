@@ -24,8 +24,10 @@
 #pragma pop_macro("dtNBR_ALARMS")
 //#endif 
 
-#define SNOOZE_TIME 8
+#define SNOOZE_TIME_MIN 8
 AlarmId myAlarms[5];
+AlarmId snoozeAlarmID;
+
 AlarmId id;
 AlarmId currentAlarmId;
 AlarmId testAlarm;
@@ -171,35 +173,40 @@ AlarmId assignRandomAlarmID(){
 }
 
 // functions to be called when an alarm triggers:
-void WeeklyAlarm() {
-  Serial.println("Every week day");
-  //Start beep sound
-  //set globalVariable:ALARM_IS_RINGING=TRUE
-  
+void OnceOnly() {
+  Serial.println("only once alarm");
+  ALARM_SOUND_IS_ACTIVE = 1;
+  Alarm.free(Alarm.getTriggeredAlarmId());
 }
 
 void Repeats() {
   Serial.println("Every day alarm");
+  ALARM_SOUND_IS_ACTIVE = 1;
 }
 
-void test() {
-  Serial.println("test");
+void WeeklyAlarm() {
+  Serial.println("Every week day");
+  ALARM_SOUND_IS_ACTIVE = 1;
 }
 
 void startSnooze(){
-  //method available when Alarm is due, and when re-snoozing via button
-  SNOOZE_IS_ACTIVE = 1;
-  AlarmId dd = Alarm.timerOnce(SNOOZE_TIME*1000*60, startAlarmSound);
+  //Method only available when Alarm or snooze is due and sounding. Method triggered via snooze button
+  if (ALARM_SOUND_IS_ACTIVE == 1) {
+    SNOOZE_IS_ACTIVE = 1;
+    ALARM_SOUND_IS_ACTIVE = 0;
+    snoozeAlarmID = Alarm.timerOnce(SNOOZE_TIME_MIN*1000*60, startAlarmSound);
+  }
 }
 
-void stopAlarmSound(){
-  //stop everything via button
+void stopAlarm(){
+  //Stop everything.  Method triggered via alarm-off button
   SNOOZE_IS_ACTIVE = 0;
   ALARM_SOUND_IS_ACTIVE = 0;
+  Alarm.free(snoozeAlarmID);
 }
 
 void startAlarmSound(){
-  //triggered by global variable when Alarm/Snooze alarm is due
+  //Triggered by global variable when Alarm/Snooze alarm is due
   ALARM_SOUND_IS_ACTIVE = 1;
 }
 
@@ -210,15 +217,7 @@ void alarmSound() {
   }
 }
 
-void OnceOnly() {
-  Serial.println("This timer only triggers once, stop the 2 second timer");
-  // use Alarm.free() to disable a timer and recycle its memory.
-  Alarm.free(id);
-  // optional, but safest to "forget" the ID after memory recycled
-  id = dtINVALID_ALARM_ID;
-  // you can also use Alarm.disable() to turn the timer off, but keep
-  // it in memory, to turn back on later with Alarm.enable().
-}
+
 
 //Utility classes
 void digitalClockDisplay() {
@@ -230,7 +229,7 @@ void digitalClockDisplay() {
 }
 
 void printDigits(int digits) {
-  Serial.print(printDigitsAsString(int));
+  Serial.print(printDigitsAsString(digits));
 }
 
 String printDigitsAsString(int digits) {
@@ -246,7 +245,10 @@ void serialPrintOfAlarmID(int i) {
   Serial.print("] : ");
 }
 
-
+void getCurrentAlarm() {
+        currentAlarmId = Alarm.getTriggeredAlarmId();
+      readAlarm(currentAlarmId);
+}
 
 
 void handleSerial() {
@@ -283,23 +285,19 @@ void handleSerial() {
       readAlarm(myAlarms[2]);
       break;
      case 'z':
-      Serial.println("b");
+      Serial.println("z");
       currentAlarmId = Alarm.getTriggeredAlarmId();
       readAlarm(currentAlarmId);
+      break;
+     case 'w':
+      Serial.println("w");
+      Alarm.timerOnce(1, getCurrentAlarm);
       break;
     case 'd':
       Serial.println("c - disable current alarm");
       disableAlarm(currentAlarmId);
       readAlarm(currentAlarmId);
       break;
-    case 'e': //works
-     Serial.println("e - hardcoded alarm");
-     testAlarm = Alarm.alarmOnce(17,29,30,test);
-     readAlarm(testAlarm);
-     break;
-    case 'f': //Works
-     Serial.println("f - hardcoded timer");
-     Alarm.timerOnce(2,test); 
     case 'g': //works
      Serial.println("g - hardcoded alarm");
      testAlarm = Alarm.alarmRepeat(17,29,30,Repeats);
@@ -327,7 +325,7 @@ void handleSerial() {
     case 'i': //works
      listAllAlarms();
      Serial.println("now print all that are set:");
-     listAllAlarmsThatAreSet();
+     listSetAlarms();
   }
  }
 }
