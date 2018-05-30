@@ -14,15 +14,26 @@
 // Questions?  Ask them here:
 // http://forum.arduino.cc/index.php?topic=66054.0
 
+//#ifdef dtNBR_ALARMS //if the macro dtNBR_ALARMS is defined 
+#pragma push_macro("dtNBR_ALARMS")
+#define dtNBR_ALARMS 8//redefine it with the new value
+
 #include <TimeLib.h>
 #include <TimeAlarms.h>
 
+#pragma pop_macro("dtNBR_ALARMS")
+//#endif 
+
+#define SNOOZE_TIME 8
 AlarmId myAlarms[5];
 AlarmId id;
 AlarmId currentAlarmId;
 AlarmId testAlarm;
 String incomingSerialText;
-String prevIncomingSerialText;
+
+byte SNOOZE_IS_ACTIVE = 0;
+byte ALARM_SOUND_IS_ACTIVE = 0;
+
 
 void setup() {
   Serial.begin(115200);
@@ -61,8 +72,10 @@ void loop() {
   Alarm.delay(1000); // wait one second between clock display
   Serial.println("jeffrey");
   handleSerial(); //get serial command
+  alarmSound();
 }
 
+//Alarm method classes
 AlarmId createAlarm(String alarmArrayString){
   int wod = alarmArrayString.substring(0, 1).toInt(); //måske bruge byte som datatype for at spare plads
   int hh = alarmArrayString.substring(1, 3).toInt();
@@ -71,11 +84,16 @@ AlarmId createAlarm(String alarmArrayString){
   int state = alarmArrayString.substring(6, 7).toInt();
   
   Serial.println("Create Alarm with these settings: ");
-  Serial.println(wod);
-  Serial.println(hh);
-  Serial.println(mm);
-  Serial.println(freq);
-  Serial.println(state);
+  Serial.print("Week of day: ");
+  Serial.print(wod);
+  Serial.print(" Time: ");
+  Serial.print(hh);
+  Serial.print(":");
+  Serial.print(mm);
+  Serial.print(" Frequency: ");
+  Serial.print(freq);
+  Serial.print(" On/Off: ");
+  Serial.print(state);
   switch (freq) {
     case 1: 
       Serial.println("Once Set: ");
@@ -88,26 +106,29 @@ AlarmId createAlarm(String alarmArrayString){
       return Alarm.alarmRepeat(getDow(wod),hh,mm,00,WeeklyAlarm);
   }
 }
+
 void disableAlarm(AlarmId alarmID) {
   Alarm.disable(alarmID);
 }
+
 long readAlarm(AlarmId alarmID) {
   time_t timeValue = Alarm.read(alarmID);
+  dtAlarmPeriod_t alarmType = Alarm.readType(alarmID);
 
   Serial.print("Alarm read: ");
-  Serial.print("day: ");
-  Serial.print(day(timeValue)); 
+  printDigits(day(timeValue)); 
   Serial.print("-");
-  Serial.print(month(timeValue));
+  printDigits(month(timeValue));
   Serial.print("-");
   Serial.print(year(timeValue));
   Serial.print(" ");
-  Serial.print(hour(timeValue));
+  printDigits(hour(timeValue));
+  Serial.print(":");
   printDigits(minute(timeValue));
+  Serial.print(":");
   printDigits(second(timeValue));
   Serial.println();
   
-  dtAlarmPeriod_t alarmType = Alarm.readType(alarmID);
   Serial.print("alarm type: ");
   Serial.println(alarmType);
    
@@ -117,9 +138,44 @@ long readAlarm(AlarmId alarmID) {
   return timeValue;
 }
 
+void listAllAlarms() {
+  //Method returns all the alarms in array - not used
+  for (int i=0; i<sizeof(myAlarms); i++) {
+    serialPrintOfAlarmID(i);
+    readAlarm(myAlarms[i]);
+  }
+}
+
+void listSetAlarms() {
+  //Method returns a list of all set alarms
+  for (int i=0; i<sizeof(myAlarms); i++) {
+    //only read alarms that are set (alarmtype== dtNotAllocated (enum value 0) or t_time ==-1)
+    if (Alarm.readType(myAlarms[i])!=0) {
+      serialPrintOfAlarmID(i);
+      readAlarm(myAlarms[i]);
+    }
+  }
+}
+
+AlarmId assignRandomAlarmID(){
+  //Method returns first free AlarmID
+  for (int i=0; i<sizeof(myAlarms); i++) {
+    //if alarm is not set for the particular
+    if (Alarm.readType(myAlarms[i])==0) {
+      serialPrintOfAlarmID(i);
+      readAlarm(myAlarms[i]);
+      return myAlarms[i];
+    }
+    Serial.println("No more space for new alarm.");
+  }
+}
+
 // functions to be called when an alarm triggers:
 void WeeklyAlarm() {
   Serial.println("Every week day");
+  //Start beep sound
+  //set globalVariable:ALARM_IS_RINGING=TRUE
+  
 }
 
 void Repeats() {
@@ -128,6 +184,30 @@ void Repeats() {
 
 void test() {
   Serial.println("test");
+}
+
+void startSnooze(){
+  //method available when Alarm is due, and when re-snoozing via button
+  SNOOZE_IS_ACTIVE = 1;
+  AlarmId dd = Alarm.timerOnce(SNOOZE_TIME*1000*60, startAlarmSound);
+}
+
+void stopAlarmSound(){
+  //stop everything via button
+  SNOOZE_IS_ACTIVE = 0;
+  ALARM_SOUND_IS_ACTIVE = 0;
+}
+
+void startAlarmSound(){
+  //triggered by global variable when Alarm/Snooze alarm is due
+  ALARM_SOUND_IS_ACTIVE = 1;
+}
+
+void alarmSound() {
+  //triggered by global variable
+  while (ALARM_SOUND_IS_ACTIVE==1) {
+    Serial.println("Beep Beep");
+  }
 }
 
 void OnceOnly() {
@@ -140,19 +220,17 @@ void OnceOnly() {
   // it in memory, to turn back on later with Alarm.enable().
 }
 
+//Utility classes
 void digitalClockDisplay() {
-  // digital clock display of the time
-  Serial.print(hour());
+  //Method displays digital clock time
+  printDigits(hour());
   printDigits(minute());
   printDigits(second());
   Serial.println();
 }
 
 void printDigits(int digits) {
-  Serial.print(":");
-  if (digits < 10)
-    Serial.print('0');
-  Serial.print(digits);
+  Serial.print(printDigitsAsString(int));
 }
 
 String printDigitsAsString(int digits) {
@@ -162,29 +240,14 @@ String printDigitsAsString(int digits) {
   return number + String(digits);
 }
 
-void listAllAlarms() {
-  //Prints all the alarms in array
-  for (int i=0; i<sizeof(myAlarms); i++) {
-    Serial.print("Alarm");
-    Serial.print(i);
-    readAlarm(myAlarms[i]);
-  }
+void serialPrintOfAlarmID(int i) {
+  Serial.print("Alarm[");
+  Serial.print(i);
+  Serial.print("] : ");
 }
-void listAllAlarmsThatAreSet() {
-  //Works. overvej at sortere baseret på t_time værdi
-  //Prints all the alarms in array
-  for (int i=0; i<sizeof(myAlarms); i++) {
-    if (Alarm.readType(myAlarms[i])!=0) {
-      //if alarmtype== dtNotAllocated (or t_time ==-1) then alarm is not set
-      Serial.print("Alarm");
-      Serial.print(i);
-      readAlarm(myAlarms[i]);
-    }
-  }
-}
-void assignRandomAlarmID(){
-  
-}
+
+
+
 
 void handleSerial() {
  while (Serial.available() > 0) {
@@ -268,6 +331,7 @@ void handleSerial() {
   }
  }
 }
+//enums classes
 timeDayOfWeek_t getDow(int dayNo) {
   switch (dayNo) {
         case 1:
