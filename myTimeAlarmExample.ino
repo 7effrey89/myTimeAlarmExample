@@ -24,7 +24,7 @@
 #pragma pop_macro("dtNBR_ALARMS")
 //#endif 
 
-#define SNOOZE_TIME_MIN 8
+#define SNOOZE_TIME_MIN 1 //snooze minutes
 AlarmId myAlarms[5];
 AlarmId snoozeAlarmID;
 
@@ -212,8 +212,14 @@ void startAlarmSound(){
 
 void alarmSound() {
   //triggered by global variable
-  while (ALARM_SOUND_IS_ACTIVE==1) {
+
+  //With real implementation
+  //digitalWrite(ALARMSOUND_PIN, HIGH);
+
+  //With debug mode:
+  if (ALARM_SOUND_IS_ACTIVE==1){
     Serial.println("Beep Beep");
+    delay(1000);
   }
 }
 
@@ -223,9 +229,11 @@ void alarmSound() {
 void digitalClockDisplay() {
   //Method displays digital clock time
   printDigits(hour());
+  Serial.print(":");
   printDigits(minute());
+  Serial.print(":");
   printDigits(second());
-  Serial.println();
+  Serial.println("");
 }
 
 void printDigits(int digits) {
@@ -246,8 +254,8 @@ void serialPrintOfAlarmID(int i) {
 }
 
 void getCurrentAlarm() {
-        currentAlarmId = Alarm.getTriggeredAlarmId();
-      readAlarm(currentAlarmId);
+  currentAlarmId = Alarm.getTriggeredAlarmId();
+  readAlarm(currentAlarmId);
 }
 
 
@@ -298,11 +306,6 @@ void handleSerial() {
       disableAlarm(currentAlarmId);
       readAlarm(currentAlarmId);
       break;
-    case 'g': //works
-     Serial.println("g - hardcoded alarm");
-     testAlarm = Alarm.alarmRepeat(17,29,30,Repeats);
-     readAlarm(testAlarm);
-     break;
     case 'h': 
      Serial.println("h - read alarm");
      //alarmID1 = Alarm.timerOnce(2, OnceOnly);      //7-2-2106 6:28:15 = means free
@@ -318,14 +321,17 @@ void handleSerial() {
      Alarm.free(myAlarms[5]);    //Slettet: 7-2-2106 6:28:15 = means free
 
      break;
-   case 'q': 
-     Serial.println("q - read alarm");
-     myAlarms[0] = Alarm.timerOnce(5, OnceOnly);
-     break;
-    case 'i': //works
-     listAllAlarms();
-     Serial.println("now print all that are set:");
-     listSetAlarms();
+   case 's':
+    Serial.println("s - start snooze");
+    startSnooze();
+    break;
+   case 'k':
+    Serial.println("k - stop Alarm");
+    stopAlarm();
+    break;
+   case 'i': //works
+    Serial.println("now print all that are set:");
+    listSetAlarms();
   }
  }
 }
